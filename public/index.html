@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YT Video Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/kimeiga/bahunya/dist/bahunya.min.css"
+    /> -->
+  </head>
+  <body>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <div id="app">
+      <main class="p-24">
+        <form class="flex" @submit="handleSubmit">
+          <input
+            class="w-full rounded-lg px-2 py-1 border-2 mr-2"
+            placeholder="YouTube Video URL"
+            type="text"
+            name="url"
+            id="url"
+            v-model="url"
+          />
+          <button class="border-2 rounded-lg px-2 py-1" type="submit">
+            Download
+          </button>
+        </form>
+      </main>
+    </div>
+
+    <script>
+      const { createApp } = Vue;
+      // https://www.youtube.com/watch?v=G7yzl1ArzcU
+
+      createApp({
+        data() {
+          return {
+            url: "",
+          };
+        },
+        methods: {
+          async handleSubmit(e) {
+            e.preventDefault();
+            const response = await fetch("/api/download", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                url: this.url,
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            } else {
+              const blob = await response.blob();
+              const contentDisposition = response.headers.get(
+                "Content-Disposition"
+              );
+              const fileName =
+                contentDisposition.split("filename=")[1] || "download.mp4";
+
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.setAttribute("download", fileName);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              this.url = "";
+            }
+          },
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>
