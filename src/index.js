@@ -2,34 +2,43 @@ const fs = require("fs");
 const ytdl = require("ytdl-core");
 const ffmpeg = require("fluent-ffmpeg");
 const { rimraf } = require("rimraf");
-
-// Set the path to ffmpeg executable if it's not in your PATH
-// Uncomment the line below and replace 'path_to_ffmpeg' with the path to your ffmpeg executable
-// ffmpeg.setFfmpegPath('path_to_ffmpeg');
-
-if (!fs.existsSync("./videos/")) fs.mkdirSync("./videos/");
-if (!fs.existsSync("./audios/")) fs.mkdirSync("./audios/");
-if (!fs.existsSync("./output/")) fs.mkdirSync("./output/");
+const axios = require("axios");
+const dotenv = require("dotenv");
+dotenv.config();
 
 const videos = [
   {
     id: "yLNpy62jIFk",
-    name: "Webdriver Torso 1",
   },
   {
     id: "XI7Cxdj2pAQ",
-    name: "Webdriver Torso 2",
   },
 ];
 
-const downloadVideos = (videos) => {
-  const videoPromises = videos.map((video) => {
-    const audioOutput = `./audios/${video.name}.mp3`;
+const getVideoTitle = async (videoId) => {
+  const { data } = await axios.get(
+    `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&key=${process.env.YT_API_KEY}&part=snippet`
+  );
+  const metadata = data.items[0].snippet;
+  const title = [metadata.channelTitle, metadata.title].join(" - ");
+  return title;
+};
+
+//! Requires FFMPEG to be installed on server
+const downloadVideosWithMergedAudio = (videos) => {
+  if (!fs.existsSync("./videos/")) fs.mkdirSync("./videos/");
+  if (!fs.existsSync("./audios/")) fs.mkdirSync("./audios/");
+  if (!fs.existsSync("./output/")) fs.mkdirSync("./output/");
+
+  const videoPromises = videos.map(async (video) => {
+    const videoName = await getVideoTitle(video.id);
+
+    const audioOutput = `./audios/${videoName}.mp3`;
     const audioStream = ytdl(`http://www.youtube.com/watch?v=${video.id}`, {
       quality: "highestaudio",
     });
 
-    const output = `./videos/${video.name}.mp4`;
+    const output = `./videos/${videoName}.mp4`;
     const videoUrl = `http://www.youtube.com/watch?v=${video.id}`;
     const videoStream = ytdl(videoUrl, {
       filter: (format) => {
@@ -37,9 +46,9 @@ const downloadVideos = (videos) => {
       },
     });
 
-    const audioPath = `./audios/${video.name}.mp3`;
-    const videoPath = `./videos/${video.name}.mp4`;
-    const outputPath = `./output/${video.name}.mp4`;
+    const audioPath = `./audios/${videoName}.mp3`;
+    const videoPath = `./videos/${videoName}.mp4`;
+    const outputPath = `./output/${videoName}.mp4`;
 
     const audioDownloadPromise = new Promise((resolve, reject) => {
       ffmpeg(audioStream)
@@ -105,14 +114,34 @@ const downloadVideos = (videos) => {
   return Promise.all(videoPromises);
 };
 
-downloadVideos(videos)
-  .then(() => {
-    console.log("All videos processed");
-  })
-  .catch((error) => {
-    console.error("An error occurred: ", error);
-  })
-  .finally(() => {
-    rimraf("./videos/", {});
-    rimraf("./audios/", {});
-  });
+const downloadVideos = async (videos) => {
+  if (!fs.existsSync("./output/")) fs.mkdirSync("./output/");
+
+  for (const video of videos) {
+    const videoName = await getVideoTitle(video.id);
+    const outputPath = `./output/${videoName}.mp4`;
+    const videoUrl = `http://www.youtube.com/watch?v=${video.id}`;
+    const videoStream = ytdl(videoUrl, {
+      filter: (format) => format.hasAudio && format.hasVideo,
+    });
+
+    videoStream.pipe(fs.createWriteStream(`${outputPath}`));
+  }
+};
+
+downloadVideos(videos);
+
+const downloadAudioAndVideoSeparately = false;
+if (downloadAudioAndVideoSeparately) {
+  downloadVideosWithMergedAudio(videos)
+    .then(() => {
+      console.log("All videos processed");
+    })
+    .catch((error) => {
+      console.error("An error occurred: ", error);
+    })
+    .finally(() => {
+      rimraf("./videos/", {});
+      rimraf("./audios/", {});
+    });
+}

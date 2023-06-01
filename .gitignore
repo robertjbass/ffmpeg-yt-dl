@@ -1,4 +1,6 @@
+.env
 videos
 audios
 output
 node_modules
+.DS_Store
